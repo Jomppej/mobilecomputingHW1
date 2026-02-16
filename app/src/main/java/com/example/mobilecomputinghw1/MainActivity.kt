@@ -1,7 +1,10 @@
 package com.example.mobilecomputinghw1
 
 import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -26,6 +29,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -48,6 +52,9 @@ import java.io.File
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        NotificationHelper.createNotificationChannel(this)
+
         setContent {
             MobilecomputingHW1Theme {
                 Surface(
@@ -58,6 +65,22 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    override fun onStop() {
+        super.onStop()
+        val intent = Intent(this, ShakeSensorService::class.java)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            startForegroundService(intent)
+        } else {
+            startService(intent)
+        }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        val intent = Intent(this, ShakeSensorService::class.java)
+        stopService(intent)
     }
 }
 
@@ -74,6 +97,7 @@ fun copyImageToInternalStorage(context: Context, uri: Uri): String {
 
     return outputFile.absolutePath
 }
+
 fun saveProfile(context: Context, username: String, imagePath: String) {
     val prefs = context.getSharedPreferences("user_profile", Context.MODE_PRIVATE)
     prefs.edit()
@@ -100,6 +124,28 @@ fun MainNavigation() {
     var username by remember { mutableStateOf(getUsername(context)) }
     var imagePath by remember { mutableStateOf(getImagePath(context)) }
 
+    // Notifikaatio-oikeuden pyyntö
+    var hasNotificationPermission by remember {
+        mutableStateOf(
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                context.checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) ==
+                        PackageManager.PERMISSION_GRANTED
+            } else true
+        )
+    }
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        hasNotificationPermission = granted
+    }
+
+    LaunchedEffect(Unit) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !hasNotificationPermission) {
+            permissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
+
     NavHost(navController = navController, startDestination = "main") {
         composable("main") {
             MainScreen(
@@ -122,6 +168,9 @@ fun MainNavigation() {
                 username = username,
                 imagePath = imagePath
             )
+        }
+        composable("sensor") {
+            SensorScreen(navController = navController)
         }
     }
 }
@@ -209,6 +258,19 @@ fun MainScreen(
         }
 
         Spacer(modifier = Modifier.weight(1f))
+
+        Button(
+            onClick = {
+                navController.navigate("sensor") {
+                    launchSingleTop = true
+                }
+            },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Sensor & Notifications")
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
 
         Button(
             onClick = {
