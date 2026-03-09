@@ -12,6 +12,9 @@ import android.hardware.SensorManager
 import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlin.math.sqrt
 
 class ShakeSensorService : Service(), SensorEventListener {
@@ -78,9 +81,9 @@ class ShakeSensorService : Service(), SensorEventListener {
             if (acceleration > shakeThreshold && currentTime - lastShakeTime > shakeCooldown) {
                 lastShakeTime = currentTime
 
-                val prefs = getSharedPreferences("shake_data", MODE_PRIVATE)
-                val count = prefs.getInt("shake_count", 0) + 1
-                prefs.edit().putInt("shake_count", count).apply()
+                CoroutineScope(Dispatchers.IO).launch {
+                    ShakeDatabase.getDatabase(applicationContext).shakeDao().insert(ShakeEvent())
+                }
 
                 NotificationHelper.sendShakeNotification(this)
             }
